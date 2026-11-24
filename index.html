@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2D Trail Effects Lab — 雪・草・水のトレイル</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>2D Trail Effects Lab</h1>
+  <p class="sub">1枚の「トレイルキャンバス」から、雪のへこみ・草の倒れ・水の波紋を作るデモ</p>
+</header>
+
+<main>
+  <div id="stage">
+    <canvas id="game" width="320" height="180"></canvas>
+    <div id="zone"></div>
+    <div id="toast"></div>
+  </div>
+
+  <section class="controls">
+    <div class="keys">
+      <span><kbd>←↑↓→</kbd>/<kbd>WASD</kbd> 歩く</span>
+      <span><kbd>クリック</kbd>/<kbd>ドラッグ</kbd> 地面をつつく</span>
+    </div>
+    <div class="buttons">
+      <button id="bAuto" class="on">自動歩行 <kbd>P</kbd></button>
+      <button id="bMap">トレイル重ね表示 <kbd>M</kbd></button>
+      <button id="bSnow" class="on">降雪 <kbd>F</kbd></button>
+      <button id="bReset">リセット <kbd>R</kbd></button>
+      <button id="bJump">ワープ <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></button>
+      <label class="slider">フェード/frame <input id="fade" type="range" min="1" max="8" value="2"> <span id="fadeVal">2</span></label>
+    </div>
+  </section>
+
+  <section class="maps">
+    <figure>
+      <canvas id="trailView" width="384" height="104"></canvas>
+      <figcaption><b>Trail canvas</b> 384×104 / 8bit / 毎フレーム −N フェード。枠 = 画面範囲</figcaption>
+    </figure>
+    <figure>
+      <canvas id="waveView" width="384" height="104"></canvas>
+      <figcaption><b>Wave height field</b> 水色 = 山 / 橙 = 谷（新規ペイント ≥ 64 が波源）</figcaption>
+    </figure>
+  </section>
+
+  <section class="notes">
+    <div><h3>❄ 雪</h3><p>トレイル値 ≥ 90 でへこみ、≥ 166 で深いへこみ。左上光源として「上に隣接するへこみが無い→影の壁」「下の縁→白いリップ」を1ピクセル単位で塗り分け。</p></div>
+    <div><h3>🌾 草</h3><p>各草むらが根元周辺 11×8px の最大値を読んで倒れ具合を決定。左右の勾配で傾き、トレイルが消えるとバネ（1.6Hz, ζ=0.28）で少し伸び上がりながら戻る。</p></div>
+    <div><h3>💧 水</h3><p>そのフレームで「新しく塗られた量」だけを波源にして高さ場シミュレーション。横 0.30 / 縦 0.12 の異方性ラプラシアンで、岸では減衰。山と谷の稜線だけを描く。</p></div>
+  </section>
+</main>
+
+<footer>
+  Technique based on <a href="https://www.spritecook.ai/blog/2d-trail-render-texture-snow-grass-water" target="_blank" rel="noopener">SpriteCook: 2D trail render texture</a>. All art is procedural.
+</footer>
+
+<script src="src/main.js"></script>
+</body>
+</html>
