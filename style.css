@@ -45,3 +45,5 @@ footer a { color: #9aa3e6; }
 .slider { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
 .slider input { accent-color: var(--on); width: 110px; }
 .slider span { color: var(--text); min-width: 7em; }
+.howto { display: inline-block; margin-bottom: 8px; font-size: 14px; color: var(--accent) !important; text-decoration: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; background: var(--panel); }
+.howto:hover { border-color: var(--accent); }

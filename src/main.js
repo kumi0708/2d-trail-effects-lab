@@ -468,7 +468,7 @@ function placeProps() {
     const blades = [];
     for (let b = 0; b < n; b++) blades.push({ dx: Math.round((R() - 0.5) * 5), hm: 0.6 + R() * 0.45, curl: (R() - 0.5) * 3, back: R() < 0.4 });
     blades.sort((a, b) => (b.back - a.back));
-    tufts.push({ wx, gy, h: hgt, ramp, blades, kind, press: 0, pv: 0, hold: 0, lean: 0, lv: 0, dir: 1,
+    tufts.push({ wx, gy, h: hgt, ramp, blades, kind, press: 0, pv: 0, hold: 0, rel: false, prevT: 0, lean: 0, lv: 0, dir: 1,
       flower: kind === 'grass' && R() < 0.09 ? FLOWERS[(R() * FLOWERS.length) | 0] : 0, ph: R() * 6.28 });
   };
   for (let gy = 2; gy < GH; gy += 4) for (let wx = 770; wx < 1340; wx += 6) {
@@ -568,6 +568,7 @@ const LEAF = [C('#86bc4f'), C('#b9df78')];
 // ---------------------------------------------------------------- simulation
 let time = 0, cam = 0, camXi = 0, stepCount = 0;
 let dots = [];
+const extraDots = [];
 
 function contact(a, fxw, fyg, face) {
   const t = terrAt(fxw, fyg);
@@ -582,6 +583,7 @@ function contact(a, fxw, fyg, face) {
 }
 
 function stepPlayer() {
+  if (window.__lab && window.__lab.ghost) return; // figure generator: player removed from the scene
   let dx = 0, dy = 0;
   if (keys.has('arrowleft') || keys.has('a')) dx--;
   if (keys.has('arrowright') || keys.has('d')) dx++;
@@ -668,6 +670,7 @@ function stepDucks() {
 }
 
 function stepFish() {
+  if (window.__lab && window.__lab.noFish) return;
   fishTimer -= DT;
   if (fishTimer <= 0) {
     fishTimer = 2.5 + R() * 4;
@@ -709,10 +712,14 @@ function stepTufts() {
         const slope = (sampleBlur(cx + 2, cy) - sampleBlur(cx - 2, cy)) / 4;
         lt = -clamp(slope * 140, -7, 7);
       }
-    } else if (t.press === 0 && t.hold === 0 && t.lean === 0) continue;
-    // hold follows trail up instantly, lets go over 0.08 s
-    if (target >= t.hold) t.hold = target; else t.hold = Math.max(target, t.hold - DT / 0.08);
-    if (t.hold >= t.press) { t.press = t.hold; t.pv = 0; }
+    } else if (t.press === 0 && t.hold === 0 && t.lean === 0 && t.prevT === 0) continue;
+    // hold: pressed instantly; once the trail has mostly faded (< 0.5) it lets go
+    // completely over 0.08 s, and the spring below does the springy return
+    if (target > t.prevT + 0.02 || (!t.rel && target >= t.hold)) { t.rel = false; t.hold = Math.max(t.hold, target); }
+    if (!t.rel && target < 0.5 && target < t.hold) t.rel = true;
+    if (t.rel) t.hold = Math.max(0, t.hold - DT / 0.08);
+    t.prevT = target;
+    if (!t.rel && t.hold >= t.press) { t.press = t.hold; t.pv = 0; }
     else {
       t.pv += (-W1 * W1 * (t.press - t.hold) - 2 * Z1 * W1 * t.pv) * DT; t.press += t.pv * DT;
       if (t.press < -0.18) { t.press = -0.18; t.pv = Math.max(0, t.pv); }
@@ -728,11 +735,12 @@ function step() {
   time += DT; stepCount++;
   dots = [];
   stepPlayer(); stepHares(); stepDucks(); stepFish();
+  for (const d of extraDots) dots.push(d); extraDots.length = 0;
   if (pointer.down && pointer.y >= GT) dots.push({ x: camXi + pointer.x, y: pointer.y - GT, sx: 3.0, sy: 2.4, peak: 1.3 });
 
   // camera + trail origin (whole pixels, so the trail stays glued to the ground)
   const target = clamp(player.x - VW / 2 + player.facing * 22, 0, WW - VW);
-  cam += (target - cam) * Math.min(1, DT * 2.2);
+  if (!(window.__lab && window.__lab.camLock)) cam += (target - cam) * Math.min(1, DT * 2.2);
   camXi = Math.round(cam);
   originX = camXi - MARGIN;
   const scroll = originX - lastOriginX; lastOriginX = originX;
@@ -961,12 +969,12 @@ function renderObjects() {
   for (const h of hares) if (h.x > L && h.x < Rr) list.push({ y: h.y, k: 2, o: h });
   for (const d of ducks) if (d.x > L && d.x < Rr) list.push({ y: d.y, k: 3, o: d });
   for (const f of fishes) list.push({ y: f.y, k: 4, o: f });
-  list.push({ y: player.y, k: 5, o: player });
+  if (!(window.__lab && window.__lab.ghost)) list.push({ y: player.y, k: 5, o: player });
   list.sort((a, b) => a.y - b.y);
 
   // contact shadows first (under grass)
   for (const h of hares) shadow(Math.round(h.x - camXi), GT + Math.round(h.y), 3, 1.2, 0.85 + h.z * 0.02);
-  if (terrAt(player.x, player.y) !== T_WATER) shadow(Math.round(player.x - camXi), GT + Math.round(player.y), 4.5, 1.6);
+  if (!(window.__lab && window.__lab.ghost) && terrAt(player.x, player.y) !== T_WATER) shadow(Math.round(player.x - camXi), GT + Math.round(player.y), 4.5, 1.6);
   for (const p of props) if (p.wx > L && p.wx < Rr) shadow(p.wx - camXi + 2, GT + p.gy, p.spr.w * 0.42, 1.6, 0.82);
 
   for (const e of list) {
@@ -1077,11 +1085,21 @@ function frame(now) {
   let dt = (now - last) / 1000; last = now; if (dt > 0.25) dt = 0.25;
   acc += dt;
   let n = 0;
+  if (window.__lab && window.__lab.paused) acc = 0;
   while (acc >= DT && n < 5) { step(); acc -= DT; n++; }
   if (n) { render(); if (stepCount % 2 === 0) updatePreviews(); updateZone(); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 // debug hook: advance the sim by n fixed steps (handy when rAF is throttled)
-window.__lab = { player, keys, get trail() { return trailA; }, warp, setAuto, tick(n) { for (let k = 0; k < n; k++) step(); render(); updatePreviews(); updateZone(); } };
+window.__lab = {
+  paused: false, player, keys, hares, ducks, fishes, tufts, parts, clumps, warp, setAuto, step, render, buildPlayer, HARE, DUCK, props,
+  get trail() { return trailA; }, get newPaint() { return newPaint; }, get wh() { return wh; }, wmark, cWater,
+  get originX() { return originX; }, get camXi() { return camXi; }, get time() { return time; },
+  setCam(x) { cam = x; camXi = Math.round(x); },
+  addDot(d) { extraDots.push(d); },
+  buf, img, terr, shoreDist, consts: { VW, VH, GT, GH, CW, CH, MARGIN, WW, T_SNOW, T_GRASS, T_WATER, T_SAND, T_DIRT },
+  setFade(v) { FADE = v; }, resetTrails, set showMap(v) { showMap = v; }, set snowfall(v) { snowfall = v; },
+  tick(n) { for (let k = 0; k < n; k++) step(); render(); updatePreviews(); updateZone(); },
+};
 })();
